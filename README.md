@@ -1,1 +1,0 @@
-# CNN-based-image-classification-model-using-transfer-learning-
