@@ -1,0 +1,115 @@
+Step 1: Load Dataset	
+matlab
+imds = imageDatastore('SimpleData', ...
+    'IncludeSubfolders', true, ...
+    'LabelSource', 'foldernames');
+The imageDatastore function loads all the images and assigns labels based on the folder names, which represent classes.
+
+Step 2: Balance Dataset and Split into Training/Validation Sets
+matlab
+minSetCount = min(countEachLabel(imds).Count);
+imds = splitEachLabel(imds, minSetCount, 'randomized');
+[imdsTrain, imdsValidation] = splitEachLabel(imds, 0.8, 'randomized');
+The dataset is first balanced to avoid bias toward the larger class. Then it is split 80% for training and 20% for validation.
+
+Step 3: Preprocess Images — Image Augmentation
+matlab
+inputSize = [224 224 3];
+augimdsTrain = augmentedImageDatastore(inputSize, imdsTrain, ...
+    'ColorPreprocessing', 'gray2rgb').
+augimdsValidation = augmentedImageDatastore(inputSize, imdsValidation, ...
+    'ColorPreprocessing', 'gray2rgb');
+Grayscale images are converted to RGB and resized to match the GoogLeNet input size of 224×224×3.
+
+Step 4: Modify GoogLeNet for 2-Class Classification — Transfer Learning Using GoogLeNet
+matlab
+net = googlenet;
+lgraph = layerGraph(net);
+lgraph = removeLayers(lgraph, {'loss3-classifier','prob','output'});
+The final layers of the pretrained GoogLeNet are removed and replaced with layers compatible with binary classification:
+matlab
+numClasses = 2;    % because we have two classes
+newLayers = [
+    fullyConnectedLayer(numClasses, 'Name', 'new_fc', ...
+    'WeightLearnRateFactor', 10, 'BiasLearnRateFactor', 10)
+    softmaxLayer('Name','new_softmax')
+    classificationLayer('Name','new_output')];
+They are connected to the previous layer:
+matlab
+lgraph = addLayers(lgraph, newLayers);
+lgraph = connectLayers(lgraph, 'pool5-drop_7x7_s1', 'new_fc');
+
+Step 5: Set Training Options 
+matlab
+options = trainingOptions('sgdm', ...
+    'MiniBatchSize', 10, ...
+    'MaxEpochs', 10, ...
+    'InitialLearnRate', 1e-4, ...
+    'ValidationData', augimdsValidation, ...
+    'ValidationFrequency', 5, ...
+    'Verbose', false, ...
+    'Plots', 'training-progress');
+We use Stochastic Gradient Descent with Momentum (SGDM) as the optimizer.
+
+Step 6: Train the Model or Network
+matlab
+trainedNet = trainNetwork(augimdsTrain, lgraph, options);
+Training is performed for 10 epochs
+
+
+Step 7: Evaluate Accuracy — Model Evaluation
+matlab
+YPred = classify(trainedNet, augimdsValidation);
+YValidation = imdsValidation.Labels;
+accuracy = mean(YPred == YValidation);
+fprintf("Validation Accuracy: %.2f%%\n", accuracy * 100);
+This computes classification accuracy on the validation set:   Validation Accuracy: 100.00%
+
+Step 8: Visualize Predictions or Display a Few Samples Predictions
+matlab
+% Randomly select 12 images and visualize predictions
+
+numImages = min(12, numel(imdsValidation.Files));
+perm = randperm(numel(imdsValidation.Files), numImages);
+figure.
+for i = 1:numImages
+    subplot(3, 4, i);
+    img = readimage(imdsValidation, perm(i));
+    resizedImg = imresize(img, inputSize(1:2)).
+    if size(resizedImg,3) == 1
+        resizedImg = repmat(resizedImg, [1,1,3]).
+    end
+    predLabel = classify(trainedNet, resizedImg).
+    trueLabel = imdsValidation.Labels(perm(i)).
+    imshow(img);
+    title(string(predLabel) + " / " + string(trueLabel), 'FontSize', 8);
+end
+sgtitle("Sample Predictions (Predicted / True)");
+
+Step 9: Classify New Image with UI File Picker
+matlab
+[filename, pathname] = uigetfile({'*.jpg;*.jpeg;*.png;*.bmp'}, 'Select an image to classify');
+If an image is selected, it is resized, classified, and displayed:
+matlab
+
+if isequal(filename, 0)
+    disp('SolutionAnnealed.');
+
+    [YPred, scores] = classify(trainedNet, resizedImg);  Classify the image using your trained network.
+
+    figure.
+    imshow(img);
+    title("Prediction: " + string(YPred), 'FontSize', 11); Display the input image with predicted class.
+
+
+A bar chart of classification confidence scores is also plotted:
+matlab
+figure;
+    bar(scores);
+    ylim([0 1]);  % because scores are probabilities (0–1)
+    xticklabels(trainedNet.Layers(end).Classes).
+    ylabel('Confidence').
+    xlabel('Class').
+    title('📊 Classification Confidence').
+end
+
