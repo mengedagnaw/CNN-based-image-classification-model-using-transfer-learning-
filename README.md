@@ -59,6 +59,9 @@ data/
 └── SA1100_15min/
     ├── ...
 
+
+
+
 imds = imageDatastore('data', ...
     'IncludeSubfolders', true, ...
     'LabelSource', 'foldernames');
