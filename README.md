@@ -60,9 +60,3 @@ data/
     ├── ...
 
 
-
-
-imds = imageDatastore('data', ...
-    'IncludeSubfolders', true, ...
-    'LabelSource', 'foldernames');
-
